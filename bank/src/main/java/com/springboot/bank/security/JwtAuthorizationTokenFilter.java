@@ -7,48 +7,44 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import io.jsonwebtoken.ExpiredJwtException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * JWT 过滤器
+ * 过滤器
  *
  * @author SONG
  */
-@Component
-public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
+public class JwtAuthorizationTokenFilter extends OncePerRequestFilter {
 
-  private final Log logger = LogFactory.getLog(this.getClass());
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  @Autowired
   private UserDetailsService userDetailsService;
-
-  @Autowired
   private JwtTokenUtil jwtTokenUtil;
-
-  @Value("${jwt.header}")
   private String tokenHeader;
 
-  @Value("${jwt.tokenHead}")
-  private String tokenHead;
+  public JwtAuthorizationTokenFilter(UserDetailsService userDetailsService, JwtTokenUtil jwtTokenUtil, String tokenHeader) {
+    this.userDetailsService = userDetailsService;
+    this.jwtTokenUtil = jwtTokenUtil;
+    this.tokenHeader = tokenHeader;
+  }
 
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+    logger.debug("processing authentication for '{}'", request.getRequestURL());
+
     final String requestHeader = request.getHeader(this.tokenHeader);
 
     String username = null;
     String authToken = null;
-    if (requestHeader != null && requestHeader.startsWith(tokenHead)) {
-      authToken = requestHeader.substring(tokenHead.length());
+    if (requestHeader != null && requestHeader.startsWith("Bearer ")) {
+      authToken = requestHeader.substring(7);
       try {
         username = jwtTokenUtil.getUsernameFromToken(authToken);
       } catch (IllegalArgumentException e) {
@@ -60,8 +56,9 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
       logger.warn("couldn't find bearer string, will ignore the header");
     }
 
-    logger.info("checking authentication for user " + username);
+    logger.debug("checking authentication for user '{}'", username);
     if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+      logger.debug("security context was null, so authorizating user");
 
       // It is not compelling necessary to load the use details from the database. You could also store the information
       // in the token and read it from it. It's up to you ;)
@@ -72,10 +69,11 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
       if (jwtTokenUtil.validateToken(authToken, userDetails)) {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        logger.info("authenticated user " + username + ", setting security context");
+        logger.info("authorizated user '{}', setting security context", username);
         SecurityContextHolder.getContext().setAuthentication(authentication);
       }
     }
+
     chain.doFilter(request, response);
   }
 }

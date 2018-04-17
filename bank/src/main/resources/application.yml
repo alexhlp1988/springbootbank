@@ -2,6 +2,7 @@ server:
   port: 8086
   servlet:
     context-path:
+
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -11,9 +12,22 @@ spring:
   jackson:
     serialization:
       indent_output: true
+
 mybatis:
   type-aliases-package: com.springboot.bank.domain
-  mapper-locations: mybatis/mapper/*.xml
+  mapper-locations: classpath:mybatis/mapper/*.xml
+
 logging:
   level:
     org.springframework.security: info
+
+# JWT
+jwt:
+  header: Authorization
+  secret: mySecret
+# token
+  expiration: 604800
+  route:
+    authentication:
+      path: /auth
+      refresh: /refresh
